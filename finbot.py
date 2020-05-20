@@ -127,9 +127,11 @@ class Stock(Bond):
     def __init__(self):
         # Максимальная сумма на покупку одного наименования
         self.stock_price_now = 80
+        # Минимальная сумма при которой рассматриваем вариант покупки
+        self.stock_balance_min = 30
         # Работаеи только с позициями в этих валютах
         self.currency_allow = ['USD']
-        
+
         # Наследуем 
         super(Stock, self).__init__()
 
@@ -140,11 +142,14 @@ class Stock(Bond):
         """
         print('Пробуем купить акции')
 
-        while self.balance_usd > 30:
-            if self.balance_usd > 55:
-                self.stock_price_now = self.stock_price_now * 0.95
+        # Сумма на покупку позиции
+        PRICE = 0
+
+        while self.balance_usd >= self.stock_balance_min:
+            if self.balance_usd > self.stock_price_now:
+                PRICE = self.stock_price_now * 0.95
             else:
-                self.stock_price_now = self.balance_usd - 7
+                PRICE = self.balance_usd - 7
 
             sql = """
                   SELECT 
@@ -157,7 +162,7 @@ class Stock(Bond):
                         AND V_SUMM > 0.5
                     ORDER BY V_SUMM DESC
                     LIMIT 10
-                """.format(self.stock_price_now)
+                """.format(PRICE)
             data = self.db_fetchall(sql)
             random.shuffle(data)
 
@@ -848,7 +853,7 @@ def main():
         if start_time <= current_time and end_time >= current_time:
             bond.balance_get()
             bond.stock_sell()
-            if bond.balance_usd > 30:
+            if bond.balance_usd >= self.stock_balance_min:
                 # bond.stock_update_data()        # Обновим список акций (новые и обновим параметры существующих)
                 # bond.stock_update_rating()      # Обновление рейтинга
                 bond.stock_buy()
