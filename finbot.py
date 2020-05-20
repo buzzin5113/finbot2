@@ -34,11 +34,14 @@ class Bond:
     database_path = './finbot.db'
 
     def __init__(self):
+        # Загрузим токены из файла
         self.auth_tinkoff_token = secret.token
         self.auth_telegram_token = secret.tokentel
         self.auth_iex_token = secret.tokeniex
 
+        # Аутентификация в Тинькове
         self._auth_tinkoff()
+        # Подключение кБД
         self._db_connect()
 
     def _auth_tinkoff(self):
@@ -79,6 +82,11 @@ class Bond:
         """
         Получим баланс
         """
+        # Установим суммы в 0, чтобы при ошибке не использовать устаревшие данные
+        self.balance_usd = 0
+        self.balance_rub = 0
+        self.balance_eur = 0
+
         try:
             data = self.auth_tinkoff.portfolio.portfolio_currencies_get()
             for llist in data.payload.currencies:
@@ -92,7 +100,7 @@ class Bond:
                 print('Баланс EUR: {}'.format(self.balance_eur))
         except Exception as e:
             self.telegram_send_text('Ошибка при запросе баланса')
-            self.telegram_send_text(e)
+            # self.telegram_send_text(e)
 
 
     def telegram_send_text(self, msg):
@@ -113,12 +121,16 @@ class Bond:
 
 class Stock(Bond):
 
-    stock_price_now = 80
     portfolio_stock = []
     portfolio_stock_instance = {}
 
     def __init__(self):
+        # Максимальная сумма на покупку одного наименования
+        self.stock_price_now = 80
+        # Работаеи только с позициями в этих валютах
         self.currency_allow = ['USD']
+        
+        # Наследуем 
         super(Stock, self).__init__()
 
     
@@ -356,7 +368,7 @@ class Stock(Bond):
                 self.portfolio_stock_instance['bids'] = 0.01
             self.portfolio_stock_instance['price_last'] = data.payload.last_price
 
-            if self.debug: print('Buy: ' + str(self.portfolio_stock_instance['price_buy']) + ' Asks: ' + str(self.portfolio_stock_instance['asks']) + ' Bids' + str(self.portfolio_stock_instance['bids']))
+            if self.debug: print('Buy: ' + str(self.portfolio_stock_instance['price_buy']) + ' Asks: ' + str(self.portfolio_stock_instance['asks']) + ' Bids: ' + str(self.portfolio_stock_instance['bids']))
 
             # Сохраним данные в БД, вдруг пригодятся
             sql = """
@@ -378,7 +390,7 @@ class Stock(Bond):
             time.sleep(0.5)
         except Exception as e:
             self.telegram_send_text('Ошибка при запросе стакана')
-            self.telegram_send_text(e)
+            # self.telegram_send_text(e)
 
 
     def stock_portfolio(self):
@@ -393,22 +405,26 @@ class Stock(Bond):
         self.portfolio_stock = []
 
         for llist in data.payload.positions:
-            if llist.instrument_type == 'Stock' and llist.average_position_price.currency in self.currency_allow:
-                self.portfolio_stock_instance = {}
-                self.portfolio_stock_instance['figi'] = llist.figi
-                self.portfolio_stock_instance['isin'] = llist.isin
-                self.portfolio_stock_instance['name'] = llist.name
-                self.portfolio_stock_instance['ticker'] = llist.ticker
-                self.portfolio_stock_instance['lots'] = llist.lots
-                self.portfolio_stock_instance['price_buy'] = llist.average_position_price.value
-                self.portfolio_stock_instance['yield'] = llist.expected_yield.value / llist.lots
-                self.portfolio_stock_instance['currency'] = llist.expected_yield.currency
+            try:
+                if llist.instrument_type == 'Stock' and llist.average_position_price.currency in self.currency_allow:
+                    self.portfolio_stock_instance = {}
+                    self.portfolio_stock_instance['figi'] = llist.figi
+                    self.portfolio_stock_instance['isin'] = llist.isin
+                    self.portfolio_stock_instance['name'] = llist.name
+                    self.portfolio_stock_instance['ticker'] = llist.ticker
+                    self.portfolio_stock_instance['lots'] = llist.lots
+                    self.portfolio_stock_instance['price_buy'] = llist.average_position_price.value
+                    self.portfolio_stock_instance['yield'] = llist.expected_yield.value / llist.lots
+                    self.portfolio_stock_instance['currency'] = llist.expected_yield.currency
 
-                if self.debug:
-                    print('portfolio_stock_instance')
-                    print(self.portfolio_stock_instance)
-            
-                self.portfolio_stock.append(self.portfolio_stock_instance)
+                    if self.debug:
+                        print('portfolio_stock_instance')
+                        print(self.portfolio_stock_instance)
+                
+                    self.portfolio_stock.append(self.portfolio_stock_instance)
+            except Exception as e:
+                print('Ошибка при обработке портфеля')
+                print(e)
 
         if self.debug:
             print('portfolio_stock:')
