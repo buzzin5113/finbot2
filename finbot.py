@@ -151,6 +151,8 @@ class Stock(Bond):
             else:
                 PRICE = self.balance_usd - 7
 
+            if self.debug: print('На покупку: ' + str(PRICE))
+
             sql = """
                   SELECT 
                       FIGI, TICKER, PRICE_LAST * LOT
@@ -184,7 +186,7 @@ class Stock(Bond):
             #Проверим, что разница между покупкой и продажей не слишком большая
             if ((self.portfolio_stock_instance['bids']/self.portfolio_stock_instance['asks']) - 1) * self.portfolio_stock_instance['bids'] < 0.5:
 
-                stock_count = int(self.stock_price_now / self.portfolio_stock_instance['asks'])
+                stock_count = int(PRICE / self.portfolio_stock_instance['asks'])
 
                 msg = """
                 🍭 Покупаю {} в количестве {} по {} 
@@ -853,7 +855,7 @@ def main():
         if start_time <= current_time and end_time >= current_time:
             bond.balance_get()
             bond.stock_sell()
-            if bond.balance_usd >= self.stock_balance_min:
+            if bond.balance_usd >= bond.stock_balance_min:
                 # bond.stock_update_data()        # Обновим список акций (новые и обновим параметры существующих)
                 # bond.stock_update_rating()      # Обновление рейтинга
                 bond.stock_buy()
