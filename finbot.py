@@ -126,10 +126,10 @@ class Stock(Bond):
 
     def __init__(self):
         # Максимальная сумма на покупку одного наименования
-        self.stock_price_now = 80
+        self.stock_price_now = 110
         # Минимальная сумма при которой рассматриваем вариант покупки
-        self.stock_balance_min = 30
-        # Работаеи только с позициями в этих валютах
+        self.stock_balance_min = 40
+        # Работаем только с позициями в этих валютах
         self.currency_allow = ['USD']
 
         # Наследуем 
@@ -306,7 +306,7 @@ class Stock(Bond):
                     self.portfolio_stock_instance['name'],
                     self.portfolio_stock_instance['lots'],
                     self.portfolio_stock_instance['bids'],
-                    round(((self.portfolio_stock_instance['bids']/self.portfolio_stock_instance['price_buy']) - 1)  * self.portfolio_stock_instance['price_buy'], 3)
+                    round(((self.portfolio_stock_instance['bids']/self.portfolio_stock_instance['price_buy']) - 1)  * self.portfolio_stock_instance['price_buy'] * self.portfolio_stock_instance['lots'], 3)
                     )
             self.telegram_send_text(msg)
         except:
@@ -373,9 +373,13 @@ class Stock(Bond):
                 self.portfolio_stock_instance['bids'] = data.payload.bids[0].price
             except:
                 self.portfolio_stock_instance['bids'] = 0.01
+
             self.portfolio_stock_instance['price_last'] = data.payload.last_price
 
-            if self.debug: print('Buy: ' + str(self.portfolio_stock_instance['price_buy']) + ' Asks: ' + str(self.portfolio_stock_instance['asks']) + ' Bids: ' + str(self.portfolio_stock_instance['bids']))
+            if 'price_buy' not in self.portfolio_stock_instance:
+                self.portfolio_stock_instance['price_buy'] = 'N/A'
+
+            if self.debug: print(self.portfolio_stock_instance['figi'] + ' Buy: ' + str(self.portfolio_stock_instance['price_buy']) + ' Asks: ' + str(self.portfolio_stock_instance['asks']) + ' Bids: ' + str(self.portfolio_stock_instance['bids']))
 
             # Сохраним данные в БД, вдруг пригодятся
             sql = """
@@ -397,6 +401,7 @@ class Stock(Bond):
             time.sleep(0.5)
         except Exception as e:
             self.telegram_send_text('Ошибка при запросе стакана')
+            print(e)
             # self.telegram_send_text(e)
 
 
@@ -469,7 +474,7 @@ class Stock(Bond):
                         )
                     VALUES (
                         "{}", "{}", "{}", "{}", {}, "{}", 
-                        0, 0, 0, 999999, 0, 0, 0, 0, 0, 0
+                        0, 0, 0, 999999, 0, 0, 0, 0, 0, 0,
                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0
                     );
                     """.format(
@@ -480,6 +485,9 @@ class Stock(Bond):
                         llist.lot,
                         llist.currency 
                     )
+
+                #print(sql)
+
                 self.db_executesql(sql)
                 msg = """
                 🌍
@@ -489,7 +497,7 @@ class Stock(Bond):
                 self.telegram_send_text(msg)
             else:
                 # Обновим данные по существующей в БД бумаге
-                sql = """
+                sql = """7
                     UPDATE 
                         STOCK 
                     SET
@@ -522,7 +530,7 @@ class Stock(Bond):
         Всего 5 рейтингов + сумма
         """
         # Загрузка данных
-        # self.stock_update_rating_load()
+        self.stock_update_rating_load()
         
         # Расчет рейтинга
         sql = """
@@ -562,73 +570,77 @@ class Stock(Bond):
         for llist in data:
             print('Обновление данных для ' + str(llist[0]))
 
-            self.portfolio_stock_instance['ticker'] = llist[0]
-            self.portfolio_stock_instance['figi'] = llist[1]
-
-            stock_data = iex_stock(llist[0], token=self.auth_iex_token)
-            list_stock_data = stock_data.get_quote()
-            
-            if self.debug: print(list_stock_data)
-
-            self.portfolio_stock_instance['year_max'] = list_stock_data['week52High']
-            self.portfolio_stock_instance['year_min'] = list_stock_data['week52Low']
-            self.portfolio_stock_instance['pe'] = list_stock_data['peRatio']
-
-            if self.portfolio_stock_instance['year_max'] == None: self.portfolio_stock_instance['year_max'] = 0
-            if self.portfolio_stock_instance['year_min'] == None: self.portfolio_stock_instance['year_min'] = 0
-            if self.portfolio_stock_instance['pe'] == None: self.portfolio_stock_instance['pe'] = 0
-
-            self.portfolio_stock_instance['figi'] = llist[1]
-            self.stock_price_get()
-            if self.portfolio_stock_instance['asks'] == None: self.portfolio_stock_instance['asks']  = 0.01
-
-            stock_data = iex_stock(llist[0], token=self.auth_iex_token)
-            list_stock_data = stock_data.get_dividends(	range='3m')
-            
             try:
-                self.portfolio_stock_instance['div_date'] = list_stock_data[0]['exDate']
-            except:
-                self.portfolio_stock_instance['div_date'] = '9999-01-01'
-            try:    
-                self.portfolio_stock_instance['div'] = float(list_stock_data[0]['amount'])
-            except:
-                self.portfolio_stock_instance['div'] = 0.0
-            try:
-                self.portfolio_stock_instance['div_percent'] = round((self.portfolio_stock_instance['div']/(self.portfolio_stock_instance['last_price'] / 100))* 4, 2)
-            except:
-                self.portfolio_stock_instance['div_percent'] = 0.0
-            if self.portfolio_stock_instance['div_date'] == None: self.portfolio_stock_instance['div_date'] = '9999-01-01'
-            if self.portfolio_stock_instance['div'] == None: self.portfolio_stock_instance['div'] = 0.0
+                self.portfolio_stock_instance['ticker'] = llist[0]
+                self.portfolio_stock_instance['figi'] = llist[1]
 
-            # Дополнительно обновим asks, bids, price_last
-            self.stock_price_get
+                stock_data = iex_stock(llist[0], token=self.auth_iex_token)
+                list_stock_data = stock_data.get_quote()
+                
+                if self.debug: print(list_stock_data)
 
-            if self.debug: print(self.portfolio_stock_instance)
+                self.portfolio_stock_instance['year_max'] = list_stock_data['week52High']
+                self.portfolio_stock_instance['year_min'] = list_stock_data['week52Low']
+                self.portfolio_stock_instance['pe'] = list_stock_data['peRatio']
 
-            sql = """
-                    UPDATE
-                        STOCK
-                    SET
-                        YEAR_MAX = {},
-                        YEAR_MIN = {},
-                        PE = {},
-                        PRICE_ASKS = {},
-                        DIV_DATE = '{}',
-                        DIV = {},
-                        DIV_PERCENT = {}
-                    WHERE
-                        TICKER = '{}'
-                    ;
-                  """.format(self.portfolio_stock_instance['year_max'],
-                             self.portfolio_stock_instance['year_min'],
-                             self.portfolio_stock_instance['pe'],
-                             self.portfolio_stock_instance['asks'],
-                             self.portfolio_stock_instance['div_date'],
-                             self.portfolio_stock_instance['div'],
-                             self.portfolio_stock_instance['div_percent'],
-                             self.portfolio_stock_instance['ticker']
-                            )
-            self.db_executesql(sql)
+                if self.portfolio_stock_instance['year_max'] == None: self.portfolio_stock_instance['year_max'] = 0
+                if self.portfolio_stock_instance['year_min'] == None: self.portfolio_stock_instance['year_min'] = 0
+                if self.portfolio_stock_instance['pe'] == None: self.portfolio_stock_instance['pe'] = 0
+
+                self.portfolio_stock_instance['figi'] = llist[1]
+                self.stock_price_get()
+                if self.portfolio_stock_instance['asks'] == None: self.portfolio_stock_instance['asks']  = 0.01
+
+                stock_data = iex_stock(llist[0], token=self.auth_iex_token)
+                list_stock_data = stock_data.get_dividends(	range='3m')
+                
+                try:
+                    self.portfolio_stock_instance['div_date'] = list_stock_data[0]['exDate']
+                except:
+                    self.portfolio_stock_instance['div_date'] = '9999-01-01'
+                try:    
+                    self.portfolio_stock_instance['div'] = float(list_stock_data[0]['amount'])
+                except:
+                    self.portfolio_stock_instance['div'] = 0.0
+                try:
+                    self.portfolio_stock_instance['div_percent'] = round((self.portfolio_stock_instance['div']/(self.portfolio_stock_instance['price_last'] / 100))* 4, 2)
+                except:
+                    self.portfolio_stock_instance['div_percent'] = 0.0
+                if self.portfolio_stock_instance['div_date'] == None: self.portfolio_stock_instance['div_date'] = '9999-01-01'
+                if self.portfolio_stock_instance['div'] == None: self.portfolio_stock_instance['div'] = 0.0
+
+                # Дополнительно обновим asks, bids, price_last
+                self.stock_price_get
+
+                if self.debug: print(self.portfolio_stock_instance)
+
+                sql = """
+                        UPDATE
+                            STOCK
+                        SET
+                            YEAR_MAX = {},
+                            YEAR_MIN = {},
+                            PE = {},
+                            PRICE_ASKS = {},
+                            DIV_DATE = '{}',
+                            DIV = {},
+                            DIV_PERCENT = {}
+                        WHERE
+                            TICKER = '{}'
+                        ;
+                    """.format(self.portfolio_stock_instance['year_max'],
+                                self.portfolio_stock_instance['year_min'],
+                                self.portfolio_stock_instance['pe'],
+                                self.portfolio_stock_instance['asks'],
+                                self.portfolio_stock_instance['div_date'],
+                                self.portfolio_stock_instance['div'],
+                                self.portfolio_stock_instance['div_percent'],
+                                self.portfolio_stock_instance['ticker']
+                                )
+                self.db_executesql(sql)
+            except Exception as e:
+                print(e)
+                print('Ошибка запроса параметров для расчета рейтинга')
 
 
     def stock_update_rating_v1(self):
@@ -711,12 +723,15 @@ class Stock(Bond):
 
         self.portfolio_stock_instance['pe'] = data[0][0]
 
-        self.portfolio_stock_instance['v3'] = 1 - ((self.portfolio_stock_instance['pe'] - 5) * (1 / 15))
-        if self.portfolio_stock_instance['v3'] > 1: 
-            self.portfolio_stock_instance['v3'] = 1
-        if self.portfolio_stock_instance['v3'] < 0:
+        if self.portfolio_stock_instance['pe'] > 0:
+            self.portfolio_stock_instance['v3'] = 1 - ((self.portfolio_stock_instance['pe'] - 5) * (1 / 15))
+            if self.portfolio_stock_instance['v3'] > 1: 
+                self.portfolio_stock_instance['v3'] = 1
+            if self.portfolio_stock_instance['v3'] < 0:
+                self.portfolio_stock_instance['v3'] = 0
+        else:
             self.portfolio_stock_instance['v3'] = 0
-        
+
         self.portfolio_stock_instance['v3'] = round(self.portfolio_stock_instance['v3'], 3)
 
         sql = """
@@ -845,19 +860,26 @@ def main():
     bond = Stock()
 
     # Основной цикл
-    #bond.stock_update_data() 
+    # bond.stock_update_data()        # Обновим список акций (новые и обновим параметры существующих)
+    # bond.stock_update_rating()      # Обновление рейтинга
+
+    alive = 0;
+
     while True:
         # Выполняем только в рабочее время биржи 16:30 - 23:00 МСК (TODO)
         start_time = 16*60 + 31         # Время начала 16:31
         end_time = 22*60 + 59           # Время окончания 22:59
         current_time =  datetime.datetime.now().hour*60 +datetime.datetime.now().minute
+
+        alive = alive + 1
+        if alive == 180:
+            self.telegram_send_text('I am alive!')
+            alive = 0
         
         if start_time <= current_time and end_time >= current_time:
             bond.balance_get()
             bond.stock_sell()
             if bond.balance_usd >= bond.stock_balance_min:
-                # bond.stock_update_data()        # Обновим список акций (новые и обновим параметры существующих)
-                # bond.stock_update_rating()      # Обновление рейтинга
                 bond.stock_buy()
             else:
                 print('Не на что покупать')
@@ -865,7 +887,7 @@ def main():
             print('Время не наступило')
 
         # Пауза между проверками цены 30 секунд
-        time.sleep(30)
+        time.sleep(20)
 
 
 if __name__ == ('__main__'):
