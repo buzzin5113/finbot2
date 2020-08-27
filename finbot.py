@@ -159,9 +159,12 @@ class Stock(Bond):
                   FROM 
                       STOCK
                     WHERE
-                        CURRENCY = 'USD' and PRICE_LAST * LOT < {}
-                        AND IN_STOCK = 0 and PRICE_LAST < PRICE_SELL * 0.988 
+                        CURRENCY = 'USD'
+                        AND PRICE_LAST * LOT < {}
+                        AND IN_STOCK = 0 
+                        AND PRICE_LAST < PRICE_SELL * 0.988 
                         AND V_SUMM > 0.5
+                        AND DIV > 0
                     ORDER BY V_SUMM DESC
                     LIMIT 10
                 """.format(PRICE)
@@ -497,7 +500,8 @@ class Stock(Bond):
                 self.telegram_send_text(msg)
             else:
                 # Обновим данные по существующей в БД бумаге
-                sql = """7
+                print('Обновляем {} - {} - {}'.format(llist.ticker, llist.figi, llist.name))
+                sql = """
                     UPDATE 
                         STOCK 
                     SET
@@ -860,10 +864,10 @@ def main():
     bond = Stock()
 
     # Основной цикл
-    # bond.stock_update_data()        # Обновим список акций (новые и обновим параметры существующих)
-    # bond.stock_update_rating()      # Обновление рейтинга
+    #bond.stock_update_data()        # Обновим список акций (новые и обновим параметры существующих)
+    #bond.stock_update_rating()      # Обновление рейтинга
 
-    alive = 0;
+    alive = 0
 
     while True:
         # Выполняем только в рабочее время биржи 16:30 - 23:00 МСК (TODO)
@@ -873,7 +877,7 @@ def main():
 
         alive = alive + 1
         if alive == 180:
-            self.telegram_send_text('I am alive!')
+            bond.telegram_send_text('I am alive!')
             alive = 0
         
         if start_time <= current_time and end_time >= current_time:
